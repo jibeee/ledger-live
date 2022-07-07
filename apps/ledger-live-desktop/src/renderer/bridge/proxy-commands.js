@@ -41,6 +41,9 @@ const cmdCurrencyPreload = ({ currencyId }: { currencyId: string }): Observable<
   const currency = getCryptoCurrencyById(currencyId);
   return from(bridgeImpl.getCurrencyBridge(currency).preload(currency));
 };
+cmdCurrencyPreload.inferSentryTransaction = ({ currencyId }) => ({
+  tags: { currencyId },
+});
 
 const cmdCurrencyScanAccounts = (o: {
   currencyId: string,
@@ -57,6 +60,9 @@ const cmdCurrencyScanAccounts = (o: {
     })
     .pipe(map(toScanAccountEventRaw));
 };
+cmdCurrencyScanAccounts.inferSentryTransaction = ({ currencyId }) => ({
+  tags: { currencyId },
+});
 
 const cmdAccountReceive = (o: {
   account: AccountRaw,
@@ -94,6 +100,9 @@ const cmdAccountSync = (o: {
     }),
   );
 };
+cmdAccountSync.inferSentryTransaction = ({ account }) => ({
+  tags: { currencyId: account.currencyId },
+});
 
 const cmdAccountPrepareTransaction = (o: {
   account: AccountRaw,
@@ -140,6 +149,9 @@ const cmdAccountSignOperation = (o: {
     }),
   );
 };
+cmdAccountSignOperation.inferSentryTransaction = ({ account }) => ({
+  tags: { currencyId: account.currencyId },
+});
 
 const cmdAccountBroadcast = (o: {
   account: AccountRaw,
@@ -158,6 +170,9 @@ const cmdAccountBroadcast = (o: {
     }),
   );
 };
+cmdAccountBroadcast.inferSentryTransaction = ({ account }) => ({
+  tags: { currencyId: account.currencyId },
+});
 
 const cmdAccountEstimateMaxSpendable = (o: {
   account: AccountRawLike,

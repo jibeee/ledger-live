@@ -19,4 +19,10 @@ type Result = {
 const cmd = ({ deviceId, appOp, targetId, app }: Input): Observable<Result> =>
   withDevice(deviceId)(transport => execWithTransport(transport)(appOp, targetId, app));
 
+cmd.inferSentryTransaction = ({ appOp }) => ({
+  tags: {
+    op: appOp.type + " " + appOp.name,
+  },
+});
+
 export default cmd;
