@@ -1,7 +1,7 @@
-/* eslint-disable import/named */
-import React, { useCallback, useMemo, useState, memo } from "react";
+import React, { useCallback, useMemo, useState, memo, useContext } from "react";
 import { useSelector } from "react-redux";
 import { FlatList, LayoutChangeEvent } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import Animated, {
   useAnimatedScrollHandler,
   useSharedValue,
@@ -19,8 +19,9 @@ import {
   listTokens,
   useCurrenciesByMarketcap,
 } from "@ledgerhq/live-common/currencies/index";
+import { FlexBoxProps } from "@ledgerhq/native-ui/components/Layout/Flex";
+import { Currency } from "@ledgerhq/types-cryptoassets";
 import {
-  discreetModeSelector,
   counterValueCurrencySelector,
   hasOrderedNanoSelector,
   carouselVisibilitySelector,
@@ -30,7 +31,7 @@ import globalSyncRefreshControl from "../../../components/globalSyncRefreshContr
 
 import ReadOnlyGraphCard from "../../../components/ReadOnlyGraphCard";
 import Header from "../Header";
-import TrackScreen from "../../../analytics/TrackScreen";
+import { track, TrackScreen } from "../../../analytics";
 import { NavigatorName } from "../../../const";
 import ReadOnlyAssets from "./ReadOnlyAssets";
 import { useProviders } from "../../Swap/SwapEntry";
@@ -43,9 +44,9 @@ import BuyDeviceBanner, {
   IMAGE_PROPS_BIG_NANO,
 } from "../../../components/BuyDeviceBanner";
 import SetupDeviceBanner from "../../../components/SetupDeviceBanner";
-import { FlexBoxProps } from "@ledgerhq/native-ui/components/Layout/Flex";
-import { Currency } from "@ledgerhq/live-common/types/index";
 import { ExploreWeb3Slide } from "../../../components/Carousel/shared";
+// eslint-disable-next-line import/no-cycle
+import { AnalyticsContext } from "../../../components/RootNavigator";
 
 const AnimatedFlatListWithRefreshControl = createNativeWrapper(
   Animated.createAnimatedComponent(globalSyncRefreshControl(FlatList)),
@@ -96,6 +97,7 @@ const SectionTitle = ({
   const onLinkPress = useCallback(() => {
     if (onSeeAllPress) {
       onSeeAllPress();
+      track("button_clicked", { button: "See All", screen: "Wallet" });
     }
     if (navigation && navigatorName) {
       navigation.navigate(navigatorName, { screen: screenName, params });
@@ -151,7 +153,6 @@ function PortfolioScreen({ navigation }: Props) {
     counterValueCurrencySelector,
   );
   const portfolio = usePortfolio();
-  const discreetMode = useSelector(discreetModeSelector);
   useProviders();
 
   const [graphCardEndPosition, setGraphCardEndPosition] = useState(0);
@@ -178,7 +179,7 @@ function PortfolioScreen({ navigation }: Props) {
     () => [
       hasOrderedNano && (
         <Box mx={6} mb={5} mt={6}>
-          <SetupDeviceBanner />
+          <SetupDeviceBanner screen="Wallet" />
         </Box>
       ),
       <Box mx={6} mt={3} onLayout={onPortfolioCardLayout}>
@@ -212,6 +213,11 @@ function PortfolioScreen({ navigation }: Props) {
           buttonLabel={t("buyDevice.bannerButtonTitle")}
           buttonSize="small"
           event="button_clicked"
+          eventProperties={{
+            button: "Discover the Nano",
+            screen: "Wallet",
+          }}
+          screen="Wallet"
           {...IMAGE_PROPS_BIG_NANO}
         />
       ),
@@ -227,16 +233,24 @@ function PortfolioScreen({ navigation }: Props) {
     ],
   );
 
+  const { source, setSource, setScreen } = useContext(AnalyticsContext);
+
+  useFocusEffect(
+    useCallback(() => {
+      setScreen("Wallet");
+
+      return () => {
+        setSource("Wallet");
+      };
+    }, [setSource, setScreen]),
+  );
+
   return (
     <>
       <TabBarSafeAreaView>
         <CheckLanguageAvailability />
         <CheckTermOfUseUpdate />
-        <TrackScreen
-          category="Portfolio"
-          accountsLength={topCryptoCurrencies.length}
-          discreet={discreetMode}
-        />
+        <TrackScreen category="Wallet" source={source} />
         <Box bg={"background.main"}>
           <Header
             counterValueCurrency={counterValueCurrency}

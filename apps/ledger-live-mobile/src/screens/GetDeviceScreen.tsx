@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useContext } from "react";
 import {
   Flex,
   Icons,
@@ -10,6 +10,7 @@ import {
 import Video from "react-native-video";
 import styled, { useTheme } from "styled-components/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { StackNavigationProp } from "@react-navigation/stack";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { Linking, TouchableOpacity } from "react-native";
@@ -21,7 +22,13 @@ import { urls } from "../config/urls";
 import { useNavigationInterceptor } from "./Onboarding/onboardingContext";
 import { NavigatorName, ScreenName } from "../const";
 import useIsAppInBackground from "../components/useIsAppInBackground";
-import { hasCompletedOnboardingSelector } from "../reducers/settings";
+import {
+  hasCompletedOnboardingSelector,
+  readOnlyModeEnabledSelector,
+} from "../reducers/settings";
+import { track, TrackScreen } from "../analytics";
+// eslint-disable-next-line import/no-cycle
+import { AnalyticsContext } from "../components/RootNavigator";
 
 const hitSlop = {
   bottom: 10,
@@ -32,10 +39,12 @@ const hitSlop = {
 
 const StyledSafeAreaView = styled(SafeAreaView)`
   flex: 1;
-  background-color: ${({ theme }) => theme.colors.background.main};
+  background-color: ${p => p.theme.colors.background.main};
 `;
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const sourceDark = require("../../assets/videos/NanoX_LL_Black.mp4");
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const sourceLight = require("../../assets/videos/NanoX_LL_White.mp4");
 
 const items = [
@@ -73,13 +82,23 @@ const videoStyle = {
 
 export default function GetDeviceScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation();
+  // @TODO replace any with RootStackParamList once ready
+  const navigation = useNavigation<StackNavigationProp<any>>();
   const { theme, colors } = useTheme();
   const { setShowWelcome, setFirstTimeOnboarding } = useNavigationInterceptor();
   const buyDeviceFromLive = useFeature("buyDeviceFromLive");
   const hasCompletedOnboarding = useSelector(hasCompletedOnboardingSelector);
+  const readOnlyModeEnabled = useSelector(readOnlyModeEnabledSelector);
 
-  const handleBack = useCallback(() => navigation.goBack(), [navigation]);
+  const handleBack = useCallback(() => {
+    navigation.goBack();
+    if (readOnlyModeEnabled) {
+      track("button_clicked", {
+        button: "close",
+        screen: "Upsell Nano",
+      });
+    }
+  }, [readOnlyModeEnabled, navigation]);
 
   const setupDevice = useCallback(() => {
     setShowWelcome(false);
@@ -90,7 +109,13 @@ export default function GetDeviceScreen() {
         screen: ScreenName.OnboardingDeviceSelection,
       },
     });
-  }, [navigation, setFirstTimeOnboarding, setShowWelcome]);
+    if (readOnlyModeEnabled) {
+      track("message_clicked", {
+        message: "I already have a device, set it up now",
+        screen: "Upsell Nano",
+      });
+    }
+  }, [readOnlyModeEnabled, navigation, setFirstTimeOnboarding, setShowWelcome]);
 
   const buyLedger = useCallback(() => {
     if (buyDeviceFromLive?.enabled) {
@@ -102,8 +127,13 @@ export default function GetDeviceScreen() {
 
   const videoMounted = !useIsAppInBackground();
 
+  const { source } = useContext(AnalyticsContext);
+
   return (
     <StyledSafeAreaView>
+      {readOnlyModeEnabled ? (
+        <TrackScreen category="ReadOnly" name="Upsell Nano" source={source} />
+      ) : null}
       <Flex
         flexDirection="row"
         alignItems="center"
@@ -143,19 +173,21 @@ export default function GetDeviceScreen() {
             <Video
               disableFocus
               source={theme === "light" ? sourceLight : sourceDark}
+              // @ts-expect-error issue in typings
               style={{
-                ...videoStyle,
                 backgroundColor: colors.background.main,
                 transform: [{ scale: 1.4 }],
+                ...videoStyle,
               }}
               muted
               resizeMode={"cover"}
             />
           )}
           <Flex
+            // @ts-expect-error issue in typings
             style={{
-              ...videoStyle,
               opacity: 0.1,
+              ...videoStyle,
             }}
             bg="background.main"
           />
@@ -183,7 +215,11 @@ export default function GetDeviceScreen() {
           my={6}
           type="main"
           outline={false}
-          event="BuyDeviceScreen - Buy Ledger"
+          event="button_clicked"
+          eventProperties={{
+            button: "Buy your Ledger now",
+            screen: ScreenName.GetDevice,
+          }}
           onPress={buyLedger}
           size="large"
         >

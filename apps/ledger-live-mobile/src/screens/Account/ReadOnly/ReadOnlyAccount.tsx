@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useContext } from "react";
 import { FlatList } from "react-native";
 import { useSelector } from "react-redux";
 import { Trans, useTranslation } from "react-i18next";
@@ -8,7 +8,8 @@ import {
   getCryptoCurrencyById,
   getTokenById,
 } from "@ledgerhq/live-common/currencies/index";
-import { Currency } from "@ledgerhq/live-common/types/index";
+import { Currency } from "@ledgerhq/types-cryptoassets";
+import { useFocusEffect } from "@react-navigation/native";
 
 import { TAB_BAR_SAFE_HEIGHT } from "../../../components/TabBar/TabBarSafeAreaView";
 import ReadOnlyGraphCard from "../../../components/ReadOnlyGraphCard";
@@ -25,7 +26,9 @@ import { withDiscreetMode } from "../../../context/DiscreetModeContext";
 import {
   counterValueCurrencySelector,
   hasOrderedNanoSelector,
-} from "../reducers/settings";
+} from "../../../reducers/settings";
+// eslint-disable-next-line import/no-cycle
+import { AnalyticsContext } from "../../../components/RootNavigator";
 
 type RouteParams = {
   currencyId: string;
@@ -105,7 +108,7 @@ function ReadOnlyAccount({ route }: Props) {
     </Box>,
     <Box mt={8} mx={6}>
       {hasOrderedNano ? (
-        <SetupDeviceBanner />
+        <SetupDeviceBanner screen="Assets" />
       ) : (
         <BuyDeviceBanner
           style={{
@@ -116,6 +119,12 @@ function ReadOnlyAccount({ route }: Props) {
           buttonLabel={t("buyDevice.bannerButtonTitle")}
           buttonSize="small"
           event="button_clicked"
+          eventProperties={{
+            button: "Discover the Nano",
+            screen: "Account",
+            currency: currency.name,
+          }}
+          screen="Account"
           {...IMAGE_PROPS_BIG_NANO}
         />
       )}
@@ -125,9 +134,26 @@ function ReadOnlyAccount({ route }: Props) {
   const renderItem = useCallback(({ item }: any) => item, []);
   const keyExtractor = useCallback((_: any, index: any) => String(index), []);
 
+  const { source, setSource, setScreen } = useContext(AnalyticsContext);
+
+  useFocusEffect(
+    useCallback(() => {
+      setScreen("Account");
+
+      return () => {
+        setSource("Account");
+      };
+    }, [setSource, setScreen]),
+  );
+
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["bottom", "left", "right"]}>
-      <TrackScreen category="Account" currency={currency} operationsSize={0} />
+      <TrackScreen
+        category="Account"
+        currency={currency}
+        operationsSize={0}
+        source={source}
+      />
       <FlatList
         contentContainerStyle={{ paddingBottom: TAB_BAR_SAFE_HEIGHT }}
         data={data}

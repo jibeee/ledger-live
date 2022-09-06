@@ -1,6 +1,7 @@
-import React, { useCallback, useMemo, memo } from "react";
+import React, { useCallback, useMemo, memo, useContext } from "react";
 import { FlatList } from "react-native";
 import { Flex, Text } from "@ledgerhq/native-ui";
+import { useFocusEffect } from "@react-navigation/native";
 
 import { Trans, useTranslation } from "react-i18next";
 import {
@@ -9,6 +10,7 @@ import {
   listTokens,
   useCurrenciesByMarketcap,
 } from "@ledgerhq/live-common/currencies/index";
+import { CryptoCurrency } from "@ledgerhq/types-cryptoassets";
 import TrackScreen from "../../../analytics/TrackScreen";
 import NoResultsFound from "../../../icons/NoResultsFound";
 
@@ -22,7 +24,8 @@ import TabBarSafeAreaView, {
   TAB_BAR_SAFE_HEIGHT,
 } from "../../../components/TabBar/TabBarSafeAreaView";
 import AccountsNavigationHeader from "../AccountsNavigationHeader";
-import { CryptoCurrency } from "@ledgerhq/live-common/types/index";
+// eslint-disable-next-line import/no-cycle
+import { AnalyticsContext } from "../../../components/RootNavigator";
 
 const SEARCH_KEYS = ["name", "unit.code", "token.name", "token.ticker"];
 
@@ -56,7 +59,11 @@ function ReadOnlyAccounts({ navigation, route }: Props) {
 
   const renderItem = useCallback(
     ({ item }: { item: CryptoCurrency }) => (
-      <ReadOnlyAccountRow navigation={navigation} currency={item} />
+      <ReadOnlyAccountRow
+        navigation={navigation}
+        currency={item}
+        screen="Assets"
+      />
     ),
     [navigation],
   );
@@ -97,7 +104,7 @@ function ReadOnlyAccounts({ navigation, route }: Props) {
         }
       />
     ),
-    [renderItem],
+    [navigation, renderItem, t],
   );
 
   const renderEmptySearch = useCallback(
@@ -129,9 +136,21 @@ function ReadOnlyAccounts({ navigation, route }: Props) {
     [t],
   );
 
+  const { source, setSource, setScreen } = useContext(AnalyticsContext);
+
+  useFocusEffect(
+    useCallback(() => {
+      setScreen("Assets");
+
+      return () => {
+        setSource("Assets");
+      };
+    }, [setSource, setScreen]),
+  );
+
   return (
     <TabBarSafeAreaView>
-      <TrackScreen category="Accounts" accountsLength={accounts.length} />
+      <TrackScreen category="ReadOnly" name="Assets" source={source} />
       <Flex flex={1} bg={"background.main"}>
         <AccountsNavigationHeader readOnly />
         <FilteredSearchBar

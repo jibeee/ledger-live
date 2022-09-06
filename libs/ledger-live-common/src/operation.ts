@@ -1,16 +1,16 @@
+import type {
+  Account,
+  AccountLike,
+  NFTStandard,
+  Operation,
+} from "@ledgerhq/types-live";
 import { BigNumber } from "bignumber.js";
+import { decodeAccountId } from "./account";
 import { encodeNftId } from "./nft";
 import {
   encodeERC1155OperationId,
   encodeERC721OperationId,
 } from "./nft/nftOperationId";
-import {
-  Account,
-  AccountLike,
-  decodeAccountId,
-  NFTStandard,
-  Operation,
-} from "./types";
 
 const nftOperationIdEncoderPerStandard: Record<
   NFTStandard,
@@ -84,6 +84,30 @@ export function decodeOperationId(id: string): {
     accountId,
     hash,
     type,
+  };
+}
+
+export function encodeSubOperationId(
+  accountId: string,
+  hash: string,
+  type: string,
+  index: string | number
+): string {
+  return `${accountId}-${hash}-${type}-i${index}`;
+}
+
+export function decodeSubOperationId(id: string): {
+  accountId: string;
+  hash: string;
+  type: string;
+  index: number;
+} {
+  const [accountId, hash, type, index] = id.split("-");
+  return {
+    accountId,
+    hash,
+    type,
+    index: Number(index),
   };
 }
 

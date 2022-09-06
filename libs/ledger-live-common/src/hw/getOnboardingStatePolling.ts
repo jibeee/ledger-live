@@ -16,8 +16,9 @@ import {
   DeviceExtractOnboardingStateError,
   DisconnectedDevice,
   CantOpenDevice,
+  TransportRaceCondition,
 } from "@ledgerhq/errors";
-import { FirmwareInfo } from "../types/manager";
+import { FirmwareInfo } from "@ledgerhq/types-live";
 import {
   extractOnboardingState,
   OnboardingState,
@@ -26,6 +27,15 @@ import {
 export type OnboardingStatePollingResult = {
   onboardingState: OnboardingState | null;
   allowedError: Error | null;
+};
+
+export type GetOnboardingStatePollingResult =
+  Observable<OnboardingStatePollingResult>;
+
+export type GetOnboardingStatePollingArgs = {
+  deviceId: string;
+  pollingPeriodMs: number;
+  fetchingTimeoutMs?: number;
 };
 
 /**
@@ -39,11 +49,7 @@ export const getOnboardingStatePolling = ({
   deviceId,
   pollingPeriodMs,
   fetchingTimeoutMs = pollingPeriodMs,
-}: {
-  deviceId: string;
-  pollingPeriodMs: number;
-  fetchingTimeoutMs?: number;
-}): Observable<OnboardingStatePollingResult> => {
+}: GetOnboardingStatePollingArgs): GetOnboardingStatePollingResult => {
   let firstRun = true;
 
   const delayedOnceOnboardingStateObservable: Observable<OnboardingStatePollingResult> =
@@ -144,6 +150,7 @@ export const isAllowedOnboardingStatePollingError = (error: Error): boolean => {
     (error instanceof TimeoutError ||
       error instanceof DisconnectedDevice ||
       error instanceof CantOpenDevice ||
+      error instanceof TransportRaceCondition ||
       error instanceof TransportStatusError)
   ) {
     return true;

@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState, useMemo, useContext } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Flex,
@@ -8,7 +8,7 @@ import {
   StoriesIndicator,
   Box,
 } from "@ledgerhq/native-ui";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import styled, { useTheme } from "styled-components/native";
 import { useDispatch } from "react-redux";
@@ -17,6 +17,10 @@ import { Image, ImageProps } from "react-native";
 import { completeOnboarding, setReadOnlyMode } from "../../../actions/settings";
 
 import { NavigatorName } from "../../../const";
+import { screen, track } from "../../../analytics";
+
+// eslint-disable-next-line import/no-cycle
+import { AnalyticsContext } from "../../../components/RootNavigator";
 
 const slidesImages = [
   require("../../../../assets/images/onboarding/stories/slide1.png"),
@@ -34,33 +38,58 @@ const Item = ({
   title,
   imageProps,
   displayNavigationButtons = false,
+  currentIndex,
 }: {
   title: string;
   imageProps: ImageProps;
   displayNavigationButtons?: boolean;
+  currentIndex?: number;
 }) => {
   const dispatch = useDispatch();
   const navigation = useNavigation();
   const { colors } = useTheme();
   const { t } = useTranslation();
 
+  const screenName = useMemo(
+    () => `Reborn Story Step ${currentIndex}`,
+    [currentIndex],
+  );
+
+  const onClick = useCallback(
+    (value: string) => {
+      track("button_clicked", {
+        button: value,
+        screen: screenName,
+      });
+    },
+    [screenName],
+  );
+
   const buyLedger = useCallback(() => {
-    // TODO: FIX @react-navigation/native using Typescript
-    // @ts-ignore next-line
+    onClick("Buy a Ledger");
     navigation.navigate(NavigatorName.BuyDevice);
-  }, [navigation]);
+  }, [navigation, onClick]);
 
   const exploreLedger = useCallback(() => {
     dispatch(completeOnboarding());
     dispatch(setReadOnlyMode(true));
+    onClick("Explore without a device");
 
-    // Fixme: Navigate to read only page ?
-    // TODO: FIX @react-navigation/native using Typescript
-    // @ts-ignore next-line
-    navigation.navigate(NavigatorName.Base, {
-      screen: NavigatorName.Main,
+    navigation.reset({
+      index: 0,
+      routes: [{ name: NavigatorName.Base } as never],
     });
-  }, [dispatch, navigation]);
+  }, [dispatch, navigation, onClick]);
+
+  const pressExplore = useCallback(() => {
+    exploreLedger();
+    onClick("Explore without a device");
+  }, [exploreLedger, onClick]);
+
+  const pressBuy = useCallback(() => {
+    buyLedger();
+    onClick("Buy a Ledger");
+  }, [buyLedger, onClick]);
 
   return (
     <Flex flex={1} backgroundColor={`background.main`}>
@@ -107,15 +136,10 @@ const Item = ({
       </Box>
       {displayNavigationButtons && (
         <Box position={"absolute"} bottom={0} width={"100%"} px={6} pb={10}>
-          <Button onPress={exploreLedger} type={"main"} mb={6} size="large">
+          <Button onPress={pressExplore} type={"main"} mb={6}>
             {t("onboarding.discoverLive.exploreWithoutADevice")}
           </Button>
-          <Button
-            onPress={buyLedger}
-            type={"shade"}
-            outline={true}
-            size="large"
-          >
+          <Button onPress={pressBuy} type={"shade"} outline={true}>
             {t("onboarding.discoverLive.buyALedgerNow")}
           </Button>
         </Box>
@@ -126,6 +150,39 @@ const Item = ({
 
 function DiscoverLiveInfo() {
   const { t } = useTranslation();
+  const [currentIndex, setCurrentIndex] = useState(1);
+  const { source, setSource, setScreen } = useContext(AnalyticsContext);
+
+  useFocusEffect(
+    useCallback(() => {
+      setScreen(`Reborn Story Step ${currentIndex}`);
+
+      return () => {
+        setSource(`Reborn Story Step ${currentIndex}`);
+      };
+    }, [setScreen, currentIndex, setSource]),
+  );
+
+  const onChange = useCallback(
+    (index: number, skipped: boolean) => {
+      setCurrentIndex(index + 1);
+      screen("Onboarding", `Reborn Story Step ${index + 1}`, {
+        skipped,
+        flow: "Onboarding No Device",
+        source,
+      });
+    },
+    [source],
+  );
+
+  const autoChange = useCallback(
+    (index: number) => onChange(index, false),
+    [onChange],
+  );
+  const manualChange = useCallback(
+    (index: number) => onChange(index, true),
+    [onChange],
+  );
 
   return (
     <StyledSafeAreaView>
@@ -143,6 +200,8 @@ function DiscoverLiveInfo() {
         }}
         scrollViewProps={{ scrollEnabled: false }}
         maxDurationOfTap={700}
+        onAutoChange={autoChange}
+        onManualChange={manualChange}
       >
         {slidesImages.map((image, index) => (
           <Item
@@ -152,6 +211,7 @@ function DiscoverLiveInfo() {
               source: image,
             }}
             displayNavigationButtons={slidesImages.length - 1 === index}
+            currentIndex={currentIndex}
           />
         ))}
       </Carousel>

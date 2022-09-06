@@ -5,7 +5,11 @@ import expect from "expect";
 import sample from "lodash/sample";
 import { isAccountEmpty } from "../account";
 import type { DeviceAction, DeviceActionArg } from "./types";
-import type { Account, Transaction } from "../types";
+import { Account } from "@ledgerhq/types-live";
+import type { Transaction } from "../generated/types";
+import { botTest } from "./bot-test-context";
+
+export { botTest };
 
 const stepValueTransformDefault = (s) => s.trim();
 
@@ -15,7 +19,14 @@ export function pickSiblings(siblings: Account[], maxAccount = 5): Account {
 
   if (siblings.length > maxAccount) {
     // we are no longer creating accounts
-    return sample(withoutEmpties) as Account;
+    const maybeAccount = sample(withoutEmpties);
+    if (!maybeAccount) {
+      throw new Error(
+        "at least one non-empty sibling account exists. maxAccount=" +
+          maxAccount
+      );
+    }
+    return maybeAccount;
   }
 
   // we are only keeping empty account that have smaller index to favorize creation of non created derivation modes
@@ -26,8 +37,15 @@ export function pickSiblings(siblings: Account[], maxAccount = 5): Account {
     empties = empties.filter((e) => e.index === empties[0].index);
   }
 
-  return sample(withoutEmpties.concat(empties)) as Account;
+  const maybeAccount = sample(withoutEmpties.concat(empties));
+  if (!maybeAccount) {
+    throw new Error(
+      "at least one sibling account exists. maxAccount=" + maxAccount
+    );
+  }
+  return maybeAccount;
 }
+
 type State<T extends Transaction> = {
   finalState: boolean;
   stepTitle: string;
@@ -53,6 +71,7 @@ type Step<T extends Transaction> = {
   button?: string;
   // action to apply in term of button press
   final?: boolean; // tells if there is no step after that and action should terminate all further action (hack to do deboncing)
+  maxY?: number; // check if text is bellow a certains Y coordinate on the screen, it happened that two text have the same content but different positions
 };
 type FlowDesc<T extends Transaction> = {
   steps: Array<Step<T>>;
@@ -87,11 +106,13 @@ export function deviceActionFlow<T extends Transaction>(
             currentStep.stepValueTransform || stepValueTransformDefault;
 
           if (!ignoreAssertionFailure) {
-            expect({
-              [stepTitle]: stepValueTransform(stepValue),
-            }).toMatchObject({
-              [stepTitle]: expectedValue(arg, acc).trim(),
-            });
+            botTest("deviceAction confirm step '" + stepTitle + "'", () =>
+              expect({
+                [stepTitle]: stepValueTransform(stepValue),
+              }).toMatchObject({
+                [stepTitle]: expectedValue(arg, acc).trim(),
+              })
+            );
           }
         }
 
@@ -119,7 +140,12 @@ export function deviceActionFlow<T extends Transaction>(
 
     if (!finalState) {
       let possibleKnownStep: Step<T> | null | undefined =
-        description.steps.find((s) => event.text.startsWith(s.title));
+        description.steps.find((s) => {
+          if (s.maxY) {
+            return event.text.startsWith(s.title) && event.y < s.maxY;
+          }
+          return event.text.startsWith(s.title);
+        });
 
       // if there is a fallback provided, we will run it to try to detect another possible known step
       if (!possibleKnownStep && description.fallback) {
